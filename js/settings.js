@@ -226,34 +226,54 @@ const Settings = {
     });
 
     // Add category
-    const addCat = () => {
+    const addCat = async () => {
       const inp = document.getElementById('s-new-cat');
       const name = inp?.value.trim();
       if (!name) return;
-      DB.addCategory(name);
-      Toast.show(`Category "${name}" added ✓`);
-      this._render();
+      try {
+        await DB.addCategory(name);
+        Toast.show(`Category "${name}" added ✓`);
+        this._render();
+      } catch (e) {
+        Toast.error(e.body?.message || e.message);
+      }
     };
     document.getElementById('s-add-cat')?.addEventListener('click', addCat);
     document.getElementById('s-new-cat')?.addEventListener('keydown', e => { if (e.key === 'Enter') addCat(); });
 
     // Remove custom categories
     document.querySelectorAll('.chip-remove[data-rm]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        DB.removeCustomCategory(btn.dataset.rm);
-        Toast.show(`Category removed.`);
-        this._render();
+      btn.addEventListener('click', async () => {
+        try {
+          await DB.removeCustomCategory(btn.dataset.rm);
+          Toast.show(`Category removed.`);
+          this._render();
+        } catch (e) {
+          Toast.error(e.body?.message || e.message);
+        }
       });
     });
 
     // Business settings
-    document.getElementById('s-tax-rate')?.addEventListener('input', e => {
+    document.getElementById('s-tax-rate')?.addEventListener('input', async e => {
       const v = parseFloat(e.target.value);
-      if (!isNaN(v)) DB.saveSetting('taxRate', v);
+      if (!isNaN(v)) {
+        try {
+          await DB.saveSetting('taxRate', v);
+        } catch (e) {
+          Toast.error(e.body?.message || e.message);
+        }
+      }
     });
-    document.getElementById('s-monthly-goal')?.addEventListener('input', e => {
+    document.getElementById('s-monthly-goal')?.addEventListener('input', async e => {
       const v = parseFloat(e.target.value);
-      if (!isNaN(v)) DB.saveSetting('monthlyGoal', v);
+      if (!isNaN(v)) {
+        try {
+          await DB.saveSetting('monthlyGoal', v);
+        } catch (e) {
+          Toast.error(e.body?.message || e.message);
+        }
+      }
     });
 
     // Break-even calculator
@@ -277,10 +297,14 @@ const Settings = {
       const btn = document.getElementById('s-clear-go');
       if (btn) { btn.disabled = !ok; btn.style.opacity = ok ? '1' : '.4'; }
     });
-    document.getElementById('s-clear-go')?.addEventListener('click', () => {
-      DB.clearAll();
-      Toast.show('All data cleared. Reloading…');
-      setTimeout(() => location.reload(), 1500);
+    document.getElementById('s-clear-go')?.addEventListener('click', async () => {
+      try {
+        await DB.clearAll();
+        Toast.show('All data cleared. Reloading…');
+        setTimeout(() => location.reload(), 1500);
+      } catch (e) {
+        Toast.error(e.body?.message || e.message);
+      }
     });
   },
 
@@ -300,16 +324,30 @@ const Settings = {
   _restoreBackup(file) {
     const reader = new FileReader();
     reader.onload = e => {
+      let json;
       try {
-        const json = JSON.parse(e.target.result);
-        DB.importBackup(json);
-        Toast.show('Backup restored ✓  Reloading…');
-        setTimeout(() => location.reload(), 1500);
+        json = JSON.parse(e.target.result);
       } catch (err) {
         Toast.error('Invalid backup file: ' + err.message);
+        return;
       }
+      this._handleImport(json);
     };
     reader.readAsText(file);
+  },
+
+  async _handleImport(json) {
+    const btn = document.getElementById('s-restore-input')?.closest('label');
+    const originalLabel = btn ? btn.childNodes[0]?.textContent?.trim() : null;
+    if (btn) { btn.style.pointerEvents = 'none'; btn.style.opacity = '0.6'; if (btn.childNodes[0]) btn.childNodes[0].textContent = 'Importing… '; }
+    try {
+      await DB.importBackup(json);
+      Toast.show('Backup restored ✓  Reloading…');
+      setTimeout(() => location.reload(), 1500);
+    } catch (e) {
+      Toast.error(e.body?.message || e.message);
+      if (btn) { btn.style.pointerEvents = ''; btn.style.opacity = ''; if (btn.childNodes[0]) btn.childNodes[0].textContent = (originalLabel ? originalLabel + ' ' : '⬆ Restore JSON '); }
+    }
   },
 
   _calcBreakEven() {
