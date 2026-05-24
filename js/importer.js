@@ -421,17 +421,22 @@ const Importer = {
   },
 
   // ── Import ────────────────────────────────────────────────────────
-  _doImport() {
+  async _doImport() {
     let added = 0, skipped = 0;
-    this._results.forEach(r => {
-      if (r.issues.length) { skipped++; return; }
-      try {
-        if (this._target === 'purchases') DB.addPurchase(r.obj);
-        else if (this._target === 'sales')    DB.addSale(r.obj);
-        else if (this._target === 'overhead') DB.addOverhead(r.obj);
-        added++;
-      } catch { skipped++; }
-    });
+    try {
+      for (const r of this._results) {
+        if (r.issues.length) { skipped++; continue; }
+        try {
+          if (this._target === 'purchases')    await DB.addPurchase(r.obj);
+          else if (this._target === 'sales')   await DB.addSale(r.obj);
+          else if (this._target === 'overhead') await DB.addOverhead(r.obj);
+          added++;
+        } catch { skipped++; }
+      }
+    } catch (e) {
+      Toast.error(e.body?.message || e.message);
+      return;
+    }
 
     this._setStep(4);
     document.getElementById('import-body').innerHTML = `
