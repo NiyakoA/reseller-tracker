@@ -33,8 +33,10 @@ const Modal = {
     this._onSave = null;
   },
 
-  save() {
-    if (this._onSave && this._onSave() !== false) this.close();
+  async save() {
+    if (!this._onSave) { this.close(); return; }
+    const result = await this._onSave();
+    if (result !== false) this.close();
   },
 };
 
