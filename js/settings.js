@@ -211,8 +211,13 @@ const Settings = {
   _bind() {
     // Theme
     document.querySelectorAll('.theme-seg-btn[data-t]').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         if (typeof applyTheme === 'function') applyTheme(btn.dataset.t);
+        try {
+          await DB.saveSetting('theme', btn.dataset.t);
+        } catch (err) {
+          Toast.error(err.body?.message || err.message);
+        }
         this._render();
       });
     });
