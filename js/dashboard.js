@@ -26,7 +26,7 @@ const Dashboard = {
     'Sports Cards':'#3b82f6','Sneakers':'#8b5cf6','Other':'#6b7280',
   },
 
-  init() {
+  async init() {
     if (!this._initialized) {
       this._initialized = true;
       document.addEventListener('themechange', () => {
@@ -41,7 +41,7 @@ const Dashboard = {
       document.getElementById('dash-export-pdf')?.addEventListener('click', () => this.exportPDF());
     }
     this.renderTimeRange();
-    this.render();
+    await this.render();
   },
 
   // ── Range helpers ────────────────────────────────────────────────
@@ -143,38 +143,46 @@ const Dashboard = {
         <button class="btn-sm" id="dash-apply">Apply</button>
       </div>`;
 
-    bar.querySelectorAll('.range-pill').forEach(btn => btn.addEventListener('click', () => {
+    bar.querySelectorAll('.range-pill').forEach(btn => btn.addEventListener('click', async () => {
       localStorage.setItem(this.rangeKey, btn.dataset.range);
       this.renderTimeRange();
       this._destroyAllCharts();
-      this.render();
+      await this.render();
     }));
-    bar.querySelector('#dash-apply')?.addEventListener('click', () => {
+    bar.querySelector('#dash-apply')?.addEventListener('click', async () => {
       localStorage.setItem('rt_custom_start', document.getElementById('dash-cs').value);
       localStorage.setItem('rt_custom_end',   document.getElementById('dash-ce').value);
       this._destroyAllCharts();
-      this.render();
+      await this.render();
     });
   },
 
   // ── Main render ──────────────────────────────────────────────────
-  render() {
+  async render() {
     const rk = this.getRange();
     const { start, end } = this.computeDates(rk, localStorage.getItem('rt_custom_start'), localStorage.getItem('rt_custom_end'));
-    const prev      = this.computePrevDates(rk, start, end);
-    const stats     = DB.getStats(start, end);
-    const prevStats = prev ? DB.getStats(prev.start, prev.end) : null;
+    const prev = this.computePrevDates(rk, start, end);
+
+    const [stats, prevStats, monthly, platformPL, categoryPL] = await Promise.all([
+      DB.getStats(start, end),
+      prev ? DB.getStats(prev.start, prev.end) : Promise.resolve(null),
+      DB.getMonthlyBreakdown(),
+      DB.getPlatformPL(start, end),
+      DB.getCategoryPL(start, end),
+    ]);
+
+    this._monthly = monthly;  // cache for chart-view-switcher
 
     this.renderKPIs(stats, prevStats);
-    this.renderInsights(stats, start, end);
-    this.renderMonthlyChart(start, end);
-    this.renderMonthlyPreview(start, end);
+    this.renderInsights(stats, start, end, monthly);
+    this.renderMonthlyChart(start, end, monthly);
+    this.renderMonthlyPreview(start, end, monthly);
     this.renderTopProducts(start, end);
-    this.renderPlatformSplit(start, end);
+    this.renderPlatformSplit(start, end, platformPL);
     this.renderCategoryChart(start, end);
     this.renderRenewalReminders();
     this.renderPerformers(start, end);
-    this.renderCategoryPL(start, end);
+    this.renderCategoryPL(start, end, categoryPL);
   },
 
   // ── KPI cards ────────────────────────────────────────────────────
@@ -233,13 +241,13 @@ const Dashboard = {
   },
 
   // ── Monthly chart — multi-view ────────────────────────────────────
-  renderMonthlyChart(start, end) {
+  renderMonthlyChart(start, end, monthly) {
     const el = document.getElementById('dash-monthly-chart');
     if (!el) return;
     this._destroyChart('monthly');
 
     const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    let months = DB.getMonthlyBreakdown();
+    let months = monthly;
     if (start || end) {
       months = months.filter(m => {
         const d = new Date(m.year, m.month - 1, 1);
@@ -273,7 +281,7 @@ const Dashboard = {
     el.querySelectorAll('[data-cv]').forEach(btn => {
       btn.addEventListener('click', () => {
         this._chartView = btn.dataset.cv;
-        this.renderMonthlyChart(start, end);
+        this.renderMonthlyChart(start, end, this._monthly);
       });
     });
 
@@ -385,11 +393,11 @@ const Dashboard = {
   },
 
   // ── Monthly preview table ─────────────────────────────────────────
-  renderMonthlyPreview(start, end) {
+  renderMonthlyPreview(start, end, monthly) {
     const el = document.getElementById('dash-monthly-preview');
     if (!el) return;
     const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    let months = DB.getMonthlyBreakdown();
+    let months = monthly;
     if (start || end) {
       months = months.filter(m => {
         const d = new Date(m.year, m.month - 1, 1);
@@ -475,12 +483,12 @@ const Dashboard = {
   },
 
   // ── Platform doughnut + P&L ───────────────────────────────────────
-  renderPlatformSplit(start, end) {
+  renderPlatformSplit(start, end, platformPL) {
     const el = document.getElementById('dash-platform-split');
     if (!el) return;
     this._destroyChart('platform');
 
-    const items = DB.getPlatformPL(start, end);
+    const items = platformPL;
     const total = items.reduce((a, d) => a + d.revenue, 0);
 
     const plRows = items.map((d, i) => {
@@ -566,7 +574,7 @@ const Dashboard = {
   },
 
   // ── Insights strip ────────────────────────────────────────────────
-  renderInsights(stats, start, end) {
+  renderInsights(stats, start, end, monthly) {
     const el = document.getElementById('dash-insights');
     if (!el) return;
 
@@ -579,7 +587,7 @@ const Dashboard = {
 
     // Current month profit
     const now = new Date();
-    const allMonths = DB.getMonthlyBreakdown();
+    const allMonths = monthly;
     const curMonth  = allMonths.find(m => m.year === now.getFullYear() && m.month === now.getMonth() + 1);
     const curProfit = curMonth ? curMonth.trueNet : 0;
     const goalPct   = monthlyGoal > 0 ? Math.min(100, (curProfit / monthlyGoal) * 100) : 0;
@@ -703,11 +711,11 @@ const Dashboard = {
   },
 
   // ── Category P&L table ────────────────────────────────────────────
-  renderCategoryPL(start, end) {
+  renderCategoryPL(start, end, categoryPL) {
     const el = document.getElementById('dash-category-pl');
     if (!el) return;
 
-    const data = DB.getCategoryPL(start, end);
+    const data = categoryPL;
 
     if (data.length === 0) {
       el.innerHTML = `
@@ -757,12 +765,17 @@ const Dashboard = {
   },
 
   // ── PDF Export ────────────────────────────────────────────────────
-  exportPDF() {
+  async exportPDF() {
     if (!window.jspdf) { Toast.error('PDF library not loaded.'); return; }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
-    const stats  = DB.getStats();
-    const months = DB.getMonthlyBreakdown();
+
+    const [stats, months, top] = await Promise.all([
+      DB.getStats(),
+      DB.getMonthlyBreakdown(),
+      DB.getTopProducts(10),
+    ]);
+
     const today  = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
 
     // Title
@@ -817,7 +830,6 @@ const Dashboard = {
     }
 
     // Top products
-    const top = DB.getTopProducts(10);
     if (top.length) {
       doc.setFontSize(13); doc.setFont('helvetica','bold');
       const y = doc.lastAutoTable.finalY + 14;
