@@ -739,10 +739,75 @@
     .perf-badge { font-size:11px; font-weight:700; padding:2px 7px; border-radius:99px; white-space:nowrap; }
     .perf-badge.top { background:rgba(52,211,153,.15); color:var(--green); }
     .perf-badge.bot { background:rgba(248,113,113,.15); color:var(--red); }
+
+    /* ── Auth screen ─────────────────────────────────────────────── */
+    .auth-screen {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 8000;
+    }
+    .auth-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 32px; width: 100%; max-width: 400px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+    }
+    .auth-card h1 { font-size: 22px; margin: 0 0 4px; }
+    .auth-tagline { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; }
+    .auth-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+    .auth-tab {
+      flex: 1; padding: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .auth-tab.is-active {
+      background: var(--accent);
+      color: #fff;
+      border-color: transparent;
+    }
+    .auth-form { display: flex; flex-direction: column; gap: 10px; }
+    .auth-form input {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .auth-error {
+      color: var(--red);
+      font-size: 12px;
+      min-height: 16px;
+      text-align: center;
+    }
+
+    /* ── Loading overlay (shown during DB.init()) ─────────────────── */
+    .app-loading {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px; z-index: 9000;
+      color: var(--text-muted); font-size: 14px;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
+<div id="auth-screen" class="auth-screen" style="display:none"></div>
 
+<div id="app" style="display:none">
 <!-- ── Sidebar ──────────────────────────────────────────────────── -->
 <nav id="sidebar">
   <div class="sidebar-header">
@@ -784,6 +849,10 @@
       <span class="nav-icon"><i data-lucide="settings" style="width:18px;height:18px;"></i></span>
       <span class="nav-label">Settings</span>
     </div>
+    <button id="logout-btn" class="nav-item" style="margin-top:auto" title="Log out">
+      <span class="nav-icon"><i data-lucide="log-out" style="width:18px;height:18px;"></i></span>
+      <span class="nav-label">Logout</span>
+    </button>
   </div>
 </nav>
 
@@ -981,6 +1050,7 @@
 
   </div><!-- /pages -->
 </div><!-- /main -->
+</div><!-- /app -->
 
 <script src="js/table.js"></script>
 <script src="js/data.js"></script>
