@@ -6,13 +6,14 @@ const Monthly = {
   _chart: null,
   _initialized: false,
 
-  init() {
+  async init() {
+    this._monthly = await DB.getMonthlyBreakdown();
     this._initialized = true;
     this._render();
   },
 
   _getYears() {
-    return [...new Set(DB.getMonthlyBreakdown().map(m => m.year))].sort((a,b)=>b-a);
+    return [...new Set((this._monthly || []).map(m => m.year))].sort((a,b) => b - a);
   },
 
   _render() {
@@ -66,9 +67,9 @@ const Monthly = {
 
   _renderData() {
     const MO = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const all     = DB.getMonthlyBreakdown().filter(m => m.year === this._year);
+    const all     = (this._monthly || []).filter(m => m.year === this._year);
     const compAll = this._compareYear
-      ? DB.getMonthlyBreakdown().filter(m => m.year === this._compareYear)
+      ? (this._monthly || []).filter(m => m.year === this._compareYear)
       : [];
 
     // Build compare map for O(1) lookup by month number
