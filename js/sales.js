@@ -150,14 +150,18 @@ const Sales = {
     cb.indeterminate = this._selected.size > 0 && !allChecked;
   },
 
-  _bulkDelete() {
+  async _bulkDelete() {
     const ids = [...this._selected];
     if (!ids.length) return;
     if (!confirm(`Delete ${ids.length} sale${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
-    ids.forEach(id => DB.deleteSale(id));
-    this._selected.clear();
-    this._refresh();
-    Toast.show(`Deleted ${ids.length} sale${ids.length > 1 ? 's' : ''}.`);
+    try {
+      await Promise.all(ids.map(id => DB.deleteSale(id)));
+      this._selected.clear();
+      this._refresh();
+      Toast.show(`Deleted ${ids.length} sale${ids.length > 1 ? 's' : ''}.`);
+    } catch (e) {
+      Toast.error(e.body?.message || e.message);
+    }
   },
 
   _bulkEdit() {
@@ -188,14 +192,18 @@ const Sales = {
         </div>
       </div>`;
 
-    Modal.open('Bulk Edit Sales', body, () => {
+    Modal.open('Bulk Edit Sales', body, async () => {
       const field = document.getElementById('be-field')?.value;
       const val   = document.getElementById('be-val')?.value;
       if (!field || val === undefined) return false;
-      ids.forEach(id => DB.updateSale(id, { [field]: val }));
-      this._selected.clear();
-      this._refresh();
-      Toast.show(`Updated ${ids.length} sale${ids.length > 1 ? 's' : ''} ✓`);
+      try {
+        await Promise.all(ids.map(id => DB.updateSale(id, { [field]: val })));
+        this._selected.clear();
+        this._refresh();
+        Toast.show(`Updated ${ids.length} sale${ids.length > 1 ? 's' : ''} ✓`);
+      } catch (e) {
+        Toast.error(e.body?.message || e.message);
+      }
       return true;
     });
 
@@ -527,48 +535,57 @@ const Sales = {
     if (!this.editingId) platLookup();
   },
 
-  _saveModal() {
+  async _saveModal() {
     const form = document.getElementById('sales-form');
     if (!form?.checkValidity()) { form?.reportValidity(); return false; }
     const data = Object.fromEntries(new FormData(form).entries());
     const isEdit = !!this.editingId;
-    let saved;
-    if (isEdit) {
-      saved = DB.updateSale(this.editingId, data);
-    } else {
-      saved = DB.addSale(data);
-    }
-    const np = saved ? saved.netProfit : 0;
-    if (np < 0) {
-      Toast.error('⚠️ Sale logged at a LOSS of -$' + Math.abs(np).toFixed(2));
-    } else if (np === 0) {
-      Toast.show('Sale logged at break-even.');
-    } else {
-      Toast.show(isEdit ? 'Sale updated ✓' : 'Sale added ✓');
-    }
-
-    if (saved?.sku) {
-      const inv = DB.getInventory().find(i => i._key === saved.sku);
-      if (inv && inv.qtyInStock < 0) {
-        setTimeout(() => Toast.error(
-          `⚠ "${saved.productName}" is oversold by ${Math.abs(inv.qtyInStock)} unit${Math.abs(inv.qtyInStock) !== 1 ? 's' : ''} — check your purchases.`
-        ), 150);
+    try {
+      let saved;
+      if (isEdit) {
+        saved = await DB.updateSale(this.editingId, data);
+      } else {
+        saved = await DB.addSale(data);
       }
-    }
+      const np = saved ? saved.netProfit : 0;
+      if (np < 0) {
+        Toast.error('⚠️ Sale logged at a LOSS of -$' + Math.abs(np).toFixed(2));
+      } else if (np === 0) {
+        Toast.show('Sale logged at break-even.');
+      } else {
+        Toast.show(isEdit ? 'Sale updated ✓' : 'Sale added ✓');
+      }
 
-    this.editingId = null;
-    this._refresh();
-    return true;
+      if (saved?.sku) {
+        const inv = DB.getInventory().find(i => i._key === saved.sku);
+        if (inv && inv.qtyInStock < 0) {
+          setTimeout(() => Toast.error(
+            `⚠ "${saved.productName}" is oversold by ${Math.abs(inv.qtyInStock)} unit${Math.abs(inv.qtyInStock) !== 1 ? 's' : ''} — check your purchases.`
+          ), 150);
+        }
+      }
+
+      this.editingId = null;
+      this._refresh();
+      return true;
+    } catch (e) {
+      Toast.error(e.body?.message || e.message);
+      return false;
+    }
   },
 
-  _confirmDelete(id) {
+  async _confirmDelete(id) {
     const row = DB.getSales().find(s => s.id === id);
     if (!row) return;
     if (confirm(`Delete sale of "${row.productName}"?\n\nThis cannot be undone.`)) {
-      DB.deleteSale(id);
-      this._selected.delete(id);
-      this._refresh();
-      Toast.show('Sale deleted.');
+      try {
+        await DB.deleteSale(id);
+        this._selected.delete(id);
+        this._refresh();
+        Toast.show('Sale deleted.');
+      } catch (e) {
+        Toast.error(e.body?.message || e.message);
+      }
     }
   },
 };

@@ -142,14 +142,18 @@ const Overhead = {
     cb.indeterminate = this._selected.size > 0 && !allChecked;
   },
 
-  _bulkDelete() {
+  async _bulkDelete() {
     const ids = [...this._selected];
     if (!ids.length) return;
     if (!confirm(`Delete ${ids.length} expense${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
-    ids.forEach(id => DB.deleteOverhead(id));
-    this._selected.clear();
-    this._refresh();
-    Toast.show(`Deleted ${ids.length} expense${ids.length > 1 ? 's' : ''}.`);
+    try {
+      await Promise.all(ids.map(id => DB.deleteOverhead(id)));
+      this._selected.clear();
+      this._refresh();
+      Toast.show(`Deleted ${ids.length} expense${ids.length > 1 ? 's' : ''}.`);
+    } catch (e) {
+      Toast.error(e.body?.message || e.message);
+    }
   },
 
   _bulkEdit() {
@@ -180,14 +184,18 @@ const Overhead = {
         </div>
       </div>`;
 
-    Modal.open('Bulk Edit Expenses', body, () => {
+    Modal.open('Bulk Edit Expenses', body, async () => {
       const field = document.getElementById('be-field')?.value;
       const val   = document.getElementById('be-val')?.value;
       if (!field || val === undefined) return false;
-      ids.forEach(id => DB.updateOverhead(id, { [field]: val }));
-      this._selected.clear();
-      this._refresh();
-      Toast.show(`Updated ${ids.length} expense${ids.length > 1 ? 's' : ''} ✓`);
+      try {
+        await Promise.all(ids.map(id => DB.updateOverhead(id, { [field]: val })));
+        this._selected.clear();
+        this._refresh();
+        Toast.show(`Updated ${ids.length} expense${ids.length > 1 ? 's' : ''} ✓`);
+      } catch (e) {
+        Toast.error(e.body?.message || e.message);
+      }
       return true;
     });
 
@@ -256,7 +264,7 @@ const Overhead = {
   },
 
   // Called from _bindToolbar — single permanent listener handles all qa-add clicks
-  _handleQaAdd(e) {
+  async _handleQaAdd(e) {
     const btn = e.target.closest('[data-action="qa-add"]');
     if (!btn || btn.disabled) return;
     const idx      = parseInt(btn.dataset.qi);
@@ -265,19 +273,23 @@ const Overhead = {
     const today = new Date().toISOString().split('T')[0];
     const date  = document.getElementById('qa-date')?.value  || today;
     const notes = document.getElementById('qa-notes')?.value || '';
-    DB.addOverhead({
-      date,
-      expenseName:   template.expenseName,
-      category:      template.category,
-      amount:        template.amount,
-      paymentMethod: template.paymentMethod,
-      recurring:     true,
-      notes,
-    });
-    btn.textContent      = '✓ Added';
-    btn.disabled         = true;
-    btn.style.background = 'var(--green)';
-    Toast.show(`${template.expenseName} added ✓`);
+    try {
+      await DB.addOverhead({
+        date,
+        expenseName:   template.expenseName,
+        category:      template.category,
+        amount:        template.amount,
+        paymentMethod: template.paymentMethod,
+        recurring:     true,
+        notes,
+      });
+      btn.textContent      = '✓ Added';
+      btn.disabled         = true;
+      btn.style.background = 'var(--green)';
+      Toast.show(`${template.expenseName} added ✓`);
+    } catch (e) {
+      Toast.error(e.body?.message || e.message);
+    }
   },
 
   // ── SimpleTable ─────────────────────────────────────────────────
@@ -458,32 +470,41 @@ const Overhead = {
     });
   },
 
-  _saveModal() {
+  async _saveModal() {
     const form = document.getElementById('oh-form');
     if (!form?.checkValidity()) { form?.reportValidity(); return false; }
     const data = Object.fromEntries(new FormData(form).entries());
     data.recurring = document.getElementById('oh-recurring')?.checked || false;
 
-    if (this.editingId) {
-      DB.updateOverhead(this.editingId, data);
-      Toast.show('Expense updated ✓');
-    } else {
-      DB.addOverhead(data);
-      Toast.show('Expense added ✓');
+    try {
+      if (this.editingId) {
+        await DB.updateOverhead(this.editingId, data);
+        Toast.show('Expense updated ✓');
+      } else {
+        await DB.addOverhead(data);
+        Toast.show('Expense added ✓');
+      }
+      this.editingId = null;
+      this._refresh();
+      return true;
+    } catch (e) {
+      Toast.error(e.body?.message || e.message);
+      return false;
     }
-    this.editingId = null;
-    this._refresh();
-    return true;
   },
 
-  _confirmDelete(id) {
+  async _confirmDelete(id) {
     const row = DB.getOverhead().find(o => o.id === id);
     if (!row) return;
     if (confirm(`Delete "${row.expenseName}"?\n\nThis cannot be undone.`)) {
-      DB.deleteOverhead(id);
-      this._selected.delete(id);
-      this._refresh();
-      Toast.show('Expense deleted.');
+      try {
+        await DB.deleteOverhead(id);
+        this._selected.delete(id);
+        this._refresh();
+        Toast.show('Expense deleted.');
+      } catch (e) {
+        Toast.error(e.body?.message || e.message);
+      }
     }
   },
 };

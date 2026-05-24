@@ -132,14 +132,18 @@ const Purchases = {
     cb.indeterminate = this._selected.size > 0 && !allChecked;
   },
 
-  _bulkDelete() {
+  async _bulkDelete() {
     const ids = [...this._selected];
     if (!ids.length) return;
     if (!confirm(`Delete ${ids.length} purchase${ids.length > 1 ? 's' : ''}? This cannot be undone.`)) return;
-    ids.forEach(id => DB.deletePurchase(id));
-    this._selected.clear();
-    this._refresh();
-    Toast.show(`Deleted ${ids.length} purchase${ids.length > 1 ? 's' : ''}.`);
+    try {
+      await Promise.all(ids.map(id => DB.deletePurchase(id)));
+      this._selected.clear();
+      this._refresh();
+      Toast.show(`Deleted ${ids.length} purchase${ids.length > 1 ? 's' : ''}.`);
+    } catch (e) {
+      Toast.error(e.body?.message || e.message);
+    }
   },
 
   _bulkEdit() {
@@ -174,14 +178,18 @@ const Purchases = {
         </div>
       </div>`;
 
-    Modal.open(`Bulk Edit Purchases`, body, () => {
+    Modal.open(`Bulk Edit Purchases`, body, async () => {
       const field = document.getElementById('be-field')?.value;
       const val   = document.getElementById('be-val')?.value;
       if (!field || val === undefined) return false;
-      ids.forEach(id => DB.updatePurchase(id, { [field]: val }));
-      this._selected.clear();
-      this._refresh();
-      Toast.show(`Updated ${ids.length} purchase${ids.length > 1 ? 's' : ''} ✓`);
+      try {
+        await Promise.all(ids.map(id => DB.updatePurchase(id, { [field]: val })));
+        this._selected.clear();
+        this._refresh();
+        Toast.show(`Updated ${ids.length} purchase${ids.length > 1 ? 's' : ''} ✓`);
+      } catch (e) {
+        Toast.error(e.body?.message || e.message);
+      }
       return true;
     });
 
@@ -412,30 +420,39 @@ const Purchases = {
     }
   },
 
-  _saveModal() {
+  async _saveModal() {
     const form = document.getElementById('purch-form');
     if (!form?.checkValidity()) { form?.reportValidity(); return false; }
     const data = Object.fromEntries(new FormData(form).entries());
-    if (this.editingId) {
-      DB.updatePurchase(this.editingId, data);
-      Toast.show('Purchase updated ✓');
-    } else {
-      DB.addPurchase(data);
-      Toast.show('Purchase added ✓');
+    try {
+      if (this.editingId) {
+        await DB.updatePurchase(this.editingId, data);
+        Toast.show('Purchase updated ✓');
+      } else {
+        await DB.addPurchase(data);
+        Toast.show('Purchase added ✓');
+      }
+      this.editingId = null;
+      this._refresh();
+      return true;
+    } catch (e) {
+      Toast.error(e.body?.message || e.message);
+      return false;
     }
-    this.editingId = null;
-    this._refresh();
-    return true;
   },
 
-  _confirmDelete(id) {
+  async _confirmDelete(id) {
     const row = DB.getPurchases().find(p => p.id === id);
     if (!row) return;
     if (confirm(`Delete "${row.productName}"?\n\nThis cannot be undone.`)) {
-      DB.deletePurchase(id);
-      this._selected.delete(id);
-      this._refresh();
-      Toast.show('Purchase deleted.');
+      try {
+        await DB.deletePurchase(id);
+        this._selected.delete(id);
+        this._refresh();
+        Toast.show('Purchase deleted.');
+      } catch (e) {
+        Toast.error(e.body?.message || e.message);
+      }
     }
   },
 };
