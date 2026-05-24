@@ -104,13 +104,17 @@ const Inventory = {
     ], { pageSize:25, placeholder:'No inventory items. Add purchases to see your stock.' });
 
     // Event delegation
-    document.getElementById('inv-table').addEventListener('click', e => {
+    document.getElementById('inv-table').addEventListener('click', async e => {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
       const key = btn.dataset.key;
       if (btn.dataset.action === 'toggle-listed') {
-        DB.setInvMeta(key, { listed: btn.dataset.val === 'false' || btn.dataset.val === '' ? true : false });
-        this._refresh();
+        try {
+          await DB.setInvMeta(key, { listed: btn.dataset.val === 'false' || btn.dataset.val === '' ? true : false });
+          this._refresh();
+        } catch (e) {
+          Toast.error(e.body?.message || e.message);
+        }
       }
       if (btn.dataset.action === 'quick-sell') {
         const item = DB.getInventory().find(i => i._key === key);
@@ -192,15 +196,19 @@ const Inventory = {
         </div>
       </div>`;
 
-    Modal.open('Edit Item', body, () => {
-      DB.setInvMeta(key, {
-        notes:      document.getElementById('inv-notes').value,
-        brokenDown: document.getElementById('inv-broken').checked,
-        manualAdj:  parseInt(document.getElementById('inv-adj').value) || 0,
-      });
-      this._refresh();
-      Toast.show('Item updated ✓');
-      return true;
+    Modal.open('Edit Item', body, async () => {
+      try {
+        await DB.setInvMeta(key, {
+          notes:      document.getElementById('inv-notes').value,
+          brokenDown: document.getElementById('inv-broken').checked,
+          manualAdj:  parseInt(document.getElementById('inv-adj').value) || 0,
+        });
+        this._refresh();
+        Toast.show('Item updated ✓');
+        return true;
+      } catch (e) {
+        Toast.error(e.body?.message || e.message);
+      }
     });
   },
 };
