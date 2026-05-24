@@ -1,8 +1,8 @@
 # Reseller Tracker
 
-A browser-based tool for tracking reselling income, expenses, and profit. Built for resellers who buy and sell across multiple platforms — Pokemon cards, sneakers, coins, sports cards, and more.
+A browser-based UI for tracking reselling income, expenses, and profit. Built for resellers who buy and sell across multiple platforms — Pokemon cards, sneakers, coins, sports cards, and more.
 
-Currently runs entirely in the browser with no backend required. A full backend migration (Node.js + Express + PostgreSQL) is in progress to enable multi-device sync and user accounts — see [Roadmap](#roadmap).
+The frontend talks to the `reseller-tracker-api` backend (Node.js + Express + PostgreSQL on Railway) for storage and auth. Multiple users can log in to their own accounts and access their data from any device.
 
 ---
 
@@ -87,7 +87,7 @@ A month-by-month table showing revenue, COGS, gross profit, overhead, true net p
 | CSV parsing | [PapaParse 5.4](https://www.papaparse.com/) |
 | XLSX parsing | [SheetJS 0.18](https://sheetjs.com/) |
 | PDF export | [jsPDF 2.5](https://github.com/parallax/jsPDF) + autoTable |
-| Data storage | Browser `localStorage` (current) → PostgreSQL via REST API (upcoming) |
+| Data storage | PostgreSQL via REST API (`reseller-tracker-api`) — JWT auth, multi-user |
 
 All dependencies are loaded from CDN — no build step, no `npm install`.
 
@@ -95,9 +95,11 @@ All dependencies are loaded from CDN — no build step, no `npm install`.
 
 ## Usage
 
-Open `index.html` in any modern browser. No install, no account, no internet connection required (beyond CDN loads on first open).
-
-Data is saved automatically to your browser's `localStorage` as you make changes. The app warns you when storage is 80% full and recommends exporting a backup.
+1. Deploy the backend (see `reseller-tracker-api`) and note its base URL.
+2. In `js/api.js`, set `API.baseUrl` to that URL.
+3. Make sure the backend's `FRONTEND_ORIGINS` env var includes the origin you load `index.html` from (e.g. `http://localhost:5500`).
+4. Serve the project locally (`python -m http.server 5500` or any static server) and open `http://localhost:5500`.
+5. Create an account or sign in. All data persists to the backend — no local storage required.
 
 ---
 
@@ -107,7 +109,10 @@ Data is saved automatically to your browser's `localStorage` as you make changes
 reseller-tracker/
 ├── index.html          # Single HTML file — all UI markup and styles
 └── js/
-    ├── data.js         # Data layer: localStorage schema, CRUD, aggregates
+    ├── api.js          # REST API client (fetch wrapper, token, error handling)
+    ├── auth.js         # login/signup form, token storage, logout
+    ├── app.js          # bootstrap (loading overlay, auth gate, retry screen)
+    ├── data.js         # Data layer: in-memory cache + API delegation
     ├── dashboard.js    # KPI cards, time-range selector, Chart.js charts
     ├── purchases.js    # Purchases table and form logic
     ├── sales.js        # Sales table and form logic
@@ -116,31 +121,22 @@ reseller-tracker/
     ├── pricecheck.js   # Price check tool
     ├── monthly.js      # Monthly summary table
     ├── importer.js     # CSV/XLSX import logic
-    ├── modal.js        # Shared modal/form component
+    ├── modal.js        # Shared modal/form component + Toast
     ├── table.js        # Shared table rendering component
     └── settings.js     # Settings panel
 ```
-
-All business logic lives in `data.js`. Every other file is a UI module that reads and writes through `data.js` — this separation is intentional to make the upcoming backend migration clean.
 
 ---
 
 ## Roadmap
 
-The app is being migrated to a full backend stack to support multi-device access and user accounts.
+The backend migration is complete. See the [implementation plan](docs/superpowers/plans/2026-05-23-frontend-migration.md) and [design spec](docs/superpowers/specs/2026-05-22-frontend-migration-spec.md) for the work that shipped.
 
-**Planned architecture:**
-- **Backend** — Node.js + Express REST API ([reseller-tracker-api](https://github.com/NiyakoA/reseller-tracker-api), in progress)
-- **Database** — PostgreSQL hosted on Railway
-- **Auth** — JWT-based user accounts (register/login)
-- **Data layer** — `data.js` will shift to a local cache populated from the API; all other JS files stay unchanged
-
-See the [design spec](docs/superpowers/specs/2026-05-22-database-migration-design.md) for full details.
-
-**Not in scope for the initial backend release:**
-- Email verification
-- Password reset
-- Rate limiting
+**Future polish (not yet built):**
+- Email verification on signup
+- Password reset flow
+- Hard sync (page re-render when the tab regains focus, not just cache refresh)
+- Rate limiting on the backend
 - Admin panel
 
 ---
